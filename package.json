@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "bun run src/cli.ts",
     "dev:web": "vercel dev",
-    "dev:web:next": "bun --cwd my-bun-app run dev",
-    "build:web:next": "bun --cwd my-bun-app run build",
+    "dev:web:next": "bun --cwd web run dev",
+    "build:web:next": "bun --cwd web run build",
     "private:scan": "bun run src/private-client.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",

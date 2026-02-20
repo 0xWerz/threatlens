@@ -115,12 +115,9 @@ async function main(): Promise<void> {
 }
 
 function parseArgs(raw: string[]): Args {
+  const requestedHelp = raw.includes("--help") || raw.includes("-h");
   const apiUrl = process.env.THREATLENS_API_URL || "https://threatlens.werz.xyz";
-  const apiKey = process.env.THREATLENS_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("THREATLENS_API_KEY is required");
-  }
+  const apiKey = process.env.THREATLENS_API_KEY || "";
 
   const args: Args = {
     apiUrl,
@@ -269,6 +266,10 @@ function parseArgs(raw: string[]): Args {
 
   if (args.input && (args.base || args.head || args.staged)) {
     throw new Error("--input cannot be combined with --staged/--base/--head");
+  }
+
+  if (!args.help && !requestedHelp && !args.apiKey) {
+    throw new Error("THREATLENS_API_KEY is required");
   }
 
   return args;
