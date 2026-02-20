@@ -21,7 +21,6 @@ const scanButton = document.getElementById("scan-btn");
 const sampleButton = document.getElementById("sample-btn");
 const packSelect = document.getElementById("pack");
 const failOnSelect = document.getElementById("failOn");
-const llmModeSelect = document.getElementById("llmMode");
 
 sampleButton.addEventListener("click", () => {
   diffField.value = sampleDiff;
@@ -133,7 +132,7 @@ form.addEventListener("submit", async (event) => {
         packId: packSelect.value,
         failOn: failOnSelect.value,
         llm: {
-          mode: llmModeSelect.value,
+          mode: "off",
         },
       }),
     });
@@ -148,11 +147,7 @@ form.addEventListener("submit", async (event) => {
     renderFindings(data.findings);
 
     const blockState = data.shouldBlock ? "block" : "pass";
-    const llmState = data.llm?.enabled
-      ? `LLM ${data.llm.attempted ? "ran" : "skipped"}${data.llm.model ? ` (${data.llm.model})` : ""}`
-      : "LLM off";
-    const llmMessage = data.llm?.message ? ` · ${data.llm.message}` : "";
-    scanMetaEl.textContent = `Policy ${data.policy.id} · fail-on ${data.policy.failOn} · ${blockState} · deterministic high=${data.deterministicSummary?.high ?? 0} · ${llmState}${llmMessage}`;
+    scanMetaEl.textContent = `Policy ${data.policy.id} · fail-on ${data.policy.failOn} · ${blockState} · deterministic high=${data.deterministicSummary?.high ?? 0}`;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scan failed";
     scanMetaEl.textContent = message;

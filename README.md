@@ -47,6 +47,9 @@ bun run dev:web
 
 Open `http://localhost:3000` when `vercel dev` starts.
 
+The web UI intentionally runs deterministic scans only.
+LLM advisory mode is available through authenticated API/CLI usage.
+
 ## CLI usage
 
 Scan working tree:
