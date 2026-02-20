@@ -8,6 +8,7 @@ interface LLMOptions {
   model?: string;
   timeoutMs?: number;
   maxFindings?: number;
+  apiKey?: string;
 }
 
 interface OpenRouterResponse {
@@ -64,7 +65,7 @@ export async function runLlmAdvisoryScan(params: {
     };
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = params.options?.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return {
       mode,

@@ -39,7 +39,7 @@ CLI:
 bun run src/cli.ts --help
 ```
 
-Web app + API:
+Web app + API (legacy static frontend):
 
 ```bash
 bun run dev:web
@@ -49,6 +49,14 @@ Open `http://localhost:3000` when `vercel dev` starts.
 
 The web UI intentionally runs deterministic scans only.
 LLM advisory mode is available through authenticated API/CLI usage.
+
+Next.js web app:
+
+```bash
+bun run dev:web:next
+```
+
+Then open `http://localhost:3000`.
 
 ## CLI usage
 
@@ -136,6 +144,31 @@ LLM guidance in this project:
 - deterministic findings remain the only blocking signal
 - LLM output is advisory unless explicitly changed
 - if OpenRouter fails or is not configured, scan still succeeds with deterministic checks
+
+## Private Server-To-Server LLM Flow
+
+Use this when you want authenticated LLM advisory scans from CI/backend while keeping the public UI deterministic-only.
+
+1. Configure service env vars on Vercel:
+   - `THREATLENS_API_KEY` (required for authenticated scan paths)
+   - `OPENROUTER_API_KEY` (optional, if you want service-level OpenRouter key)
+2. On your private caller (CI/backend), set:
+   - `THREATLENS_API_URL`
+   - `THREATLENS_API_KEY`
+   - `OPENROUTER_API_KEY` (optional; sent per-request as `x-openrouter-api-key`)
+3. Run the private client:
+
+```bash
+bun run private:scan --base origin/main --head HEAD --pack tenant-isolation --llm auto
+```
+
+You can also scan a diff file:
+
+```bash
+bun run private:scan --input examples/sample.diff --llm auto
+```
+
+If deterministic policy says block, the command exits with code `1`.
 
 ## Deploy (Vercel)
 

@@ -4,3 +4,4 @@ bun.lock
 dist
 coverage
 .vercel
+.skills/

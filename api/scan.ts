@@ -33,6 +33,11 @@ interface ScanRequest {
   };
 }
 
+interface RequestAuthContext {
+  hasValidApiKey: boolean;
+  openrouterApiKey?: string;
+}
+
 class ApiError extends Error {
   status: number;
 
@@ -78,12 +83,9 @@ export default async function handler(request: Request): Promise<Response> {
     const rawPayload = await parseJsonBody(request);
     const payload = validatePayload(rawPayload);
 
-    const callerKey = request.headers.get("x-api-key");
-    const hasValidApiKey =
-      !!process.env.THREATLENS_API_KEY &&
-      callerKey === process.env.THREATLENS_API_KEY;
+    const auth = resolveAuthContext(request);
 
-    if (payload.overrides && !hasValidApiKey) {
+    if (payload.overrides && !auth.hasValidApiKey) {
       throw new ApiError(
         403,
         "overrides are only available for authenticated requests",
@@ -91,7 +93,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     if (payload.llm?.mode && payload.llm.mode !== "off" && process.env.THREATLENS_API_KEY) {
-      if (!hasValidApiKey) {
+      if (!auth.hasValidApiKey) {
         throw new ApiError(401, "Missing or invalid x-api-key for LLM mode.");
       }
     }
@@ -110,7 +112,10 @@ export default async function handler(request: Request): Promise<Response> {
     const llmResult = await runLlmAdvisoryScan({
       diffText: payload.diff,
       deterministicFindings,
-      options: payload.llm,
+      options: {
+        ...payload.llm,
+        apiKey: auth.openrouterApiKey,
+      },
     });
 
     const llmFindings = applyPolicy(
@@ -160,6 +165,34 @@ export default async function handler(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);
   }
+}
+
+function resolveAuthContext(request: Request): RequestAuthContext {
+  const configuredApiKey = process.env.THREATLENS_API_KEY;
+  if (!configuredApiKey) {
+    return {
+      hasValidApiKey: false,
+    };
+  }
+
+  const callerKey = request.headers.get("x-api-key");
+  const hasValidApiKey = callerKey === configuredApiKey;
+
+  if (!hasValidApiKey) {
+    return {
+      hasValidApiKey: false,
+    };
+  }
+
+  const rawOpenrouterKey = request.headers.get("x-openrouter-api-key");
+
+  return {
+    hasValidApiKey,
+    openrouterApiKey:
+      rawOpenrouterKey && rawOpenrouterKey.trim().length > 0
+        ? rawOpenrouterKey.trim()
+        : undefined,
+  };
 }
 
 async function parseJsonBody(request: Request): Promise<unknown> {
