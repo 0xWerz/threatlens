@@ -1,13 +1,14 @@
 {
   "name": "threatlens",
-  "version": "0.1.0",
-  "description": "Security-focused PR diff scanner for modern teams",
+  "version": "0.2.0",
+  "description": "Custom PR security guardrail service with deterministic + optional LLM advisory analysis",
   "type": "module",
   "bin": {
     "threatlens": "src/cli.ts"
   },
   "scripts": {
     "dev": "bun run src/cli.ts",
+    "dev:web": "vercel dev",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
     "build": "bun build src/cli.ts --compile --outfile dist/threatlens"

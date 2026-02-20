@@ -3,3 +3,4 @@ bun.lock
 .DS_Store
 dist
 coverage
+.vercel

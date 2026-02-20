@@ -27,6 +27,8 @@ export interface Finding {
   filePath: string;
   line: number;
   evidence: string;
+  source?: "rule" | "llm";
+  confidence?: number;
 }
 
 export interface ScanSummary {

@@ -13,7 +13,9 @@ export function formatPrettyOutput(result: ScanResult): string {
     lines.push(
       `[${finding.severity.toUpperCase()}] ${finding.title} (${finding.ruleId})`,
     );
-    lines.push(`  at ${finding.filePath}:${finding.line}`);
+    lines.push(
+      `  at ${finding.filePath}:${finding.line}${finding.source ? ` [${finding.source}]` : ""}${typeof finding.confidence === "number" ? ` (confidence ${Math.round(finding.confidence * 100)}%)` : ""}`,
+    );
     lines.push(`  ${finding.description}`);
     lines.push(`  > ${finding.evidence}`);
     lines.push("");

@@ -1,6 +1,6 @@
 import { parseAddedLines } from "./diff";
 import { rules } from "./rules";
-import { Finding, ScanResult, Severity } from "./types";
+import { Finding, ScanResult, ScanSummary, Severity } from "./types";
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   high: 3,
@@ -16,7 +16,15 @@ export function severityMeetsThreshold(
     return false;
   }
 
-  return SEVERITY_ORDER[severity] >= SEVERITY_ORDER[threshold];
+  const severityRank = SEVERITY_ORDER[severity];
+  const thresholdRank = SEVERITY_ORDER[threshold];
+
+  // Fail safe if unexpected values leak into runtime.
+  if (severityRank === undefined || thresholdRank === undefined) {
+    return true;
+  }
+
+  return severityRank >= thresholdRank;
 }
 
 export function scanDiff(diffText: string): ScanResult {
@@ -44,35 +52,15 @@ export function scanDiff(diffText: string): ScanResult {
           filePath,
           line: line.line,
           evidence,
+          source: "rule",
         });
       }
     });
   }
 
-  const deduped = dedupeFindings(findings);
-  const sorted = deduped.sort((a, b) => {
-    const severityDiff = SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity];
-    if (severityDiff !== 0) {
-      return severityDiff;
-    }
+  const sorted = sortFindings(dedupeFindings(findings));
 
-    const fileDiff = a.filePath.localeCompare(b.filePath);
-    if (fileDiff !== 0) {
-      return fileDiff;
-    }
-
-    return a.line - b.line;
-  });
-
-  return {
-    findings: sorted,
-    summary: {
-      total: sorted.length,
-      high: sorted.filter((f) => f.severity === "high").length,
-      medium: sorted.filter((f) => f.severity === "medium").length,
-      low: sorted.filter((f) => f.severity === "low").length,
-    },
-  };
+  return buildScanResult(sorted);
 }
 
 function groupByFile(lines: ReturnType<typeof parseAddedLines>) {
@@ -104,4 +92,36 @@ function dedupeFindings(findings: Finding[]): Finding[] {
   }
 
   return result;
+}
+
+export function sortFindings(findings: Finding[]): Finding[] {
+  return [...findings].sort((a, b) => {
+    const severityDiff = SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity];
+    if (severityDiff !== 0) {
+      return severityDiff;
+    }
+
+    const fileDiff = a.filePath.localeCompare(b.filePath);
+    if (fileDiff !== 0) {
+      return fileDiff;
+    }
+
+    return a.line - b.line;
+  });
+}
+
+export function summarizeFindings(findings: Finding[]): ScanSummary {
+  return {
+    total: findings.length,
+    high: findings.filter((f) => f.severity === "high").length,
+    medium: findings.filter((f) => f.severity === "medium").length,
+    low: findings.filter((f) => f.severity === "low").length,
+  };
+}
+
+export function buildScanResult(findings: Finding[]): ScanResult {
+  return {
+    findings,
+    summary: summarizeFindings(findings),
+  };
 }

@@ -1,22 +1,33 @@
 #!/usr/bin/env bun
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { runLlmAdvisoryScan } from "./llm";
 import { formatPrettyOutput } from "./output";
-import { scanDiff, severityMeetsThreshold } from "./scanner";
-import { Severity } from "./types";
+import { applyPolicy, listPolicyPacks, resolvePolicyPack } from "./packs";
+import {
+  scanDiff,
+  severityMeetsThreshold,
+  sortFindings,
+  summarizeFindings,
+} from "./scanner";
+import { Finding, Severity } from "./types";
 
 interface CliArgs {
   input?: string;
   format: "pretty" | "json";
-  failOn: Severity | "none";
+  failOn?: Severity | "none";
+  pack?: string;
+  llmMode: "off" | "auto" | "always";
+  llmModel?: string;
   staged: boolean;
   base?: string;
   head?: string;
+  listPacks: boolean;
   help: boolean;
   version: boolean;
 }
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 async function main(): Promise<void> {
   const args = parseArgs(Bun.argv.slice(2));
@@ -31,17 +42,56 @@ async function main(): Promise<void> {
     return;
   }
 
-  const diffText = await resolveDiffInput(args);
-  const result = scanDiff(diffText);
-
-  if (args.format === "json") {
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    console.log(formatPrettyOutput(result));
+  if (args.listPacks) {
+    for (const pack of listPolicyPacks()) {
+      console.log(`${pack.id} - ${pack.name}`);
+      console.log(`  ${pack.description}`);
+      console.log(`  default fail-on: ${pack.defaultFailOn}`);
+      console.log("");
+    }
+    return;
   }
 
-  const shouldFail = result.findings.some((finding) =>
-    severityMeetsThreshold(finding.severity, args.failOn),
+  const diffText = await resolveDiffInput(args);
+  const pack = resolvePolicyPack(args.pack);
+  const baseResult = scanDiff(diffText);
+  const deterministicFindings = applyPolicy(baseResult.findings, pack);
+
+  const llmResult = await runLlmAdvisoryScan({
+    diffText,
+    deterministicFindings,
+    options: {
+      mode: args.llmMode,
+      model: args.llmModel,
+    },
+  });
+
+  const combinedFindings = sortFindings(
+    dedupeFindings([...deterministicFindings, ...llmResult.findings]),
+  );
+
+  const result = {
+    findings: combinedFindings,
+    summary: summarizeFindings(combinedFindings),
+  };
+
+  const failOn = args.failOn ?? pack.defaultFailOn;
+
+  if (args.format === "json") {
+    console.log(JSON.stringify({ ...result, llm: llmResult }, null, 2));
+  } else {
+    console.log(formatPrettyOutput(result));
+    console.log(`Policy pack: ${pack.id} (fail-on=${failOn})`);
+    console.log(
+      `LLM advisory: mode=${llmResult.mode}, attempted=${llmResult.attempted}, added=${llmResult.findings.length}${llmResult.model ? `, model=${llmResult.model}` : ""}`,
+    );
+    if (llmResult.reason) {
+      console.log(`LLM note: ${llmResult.reason}`);
+    }
+  }
+
+  const shouldFail = deterministicFindings.some((finding) =>
+    severityMeetsThreshold(finding.severity, failOn),
   );
 
   if (shouldFail) {
@@ -52,8 +102,9 @@ async function main(): Promise<void> {
 function parseArgs(raw: string[]): CliArgs {
   const args: CliArgs = {
     format: "pretty",
-    failOn: "medium",
+    llmMode: "off",
     staged: false,
+    listPacks: false,
     help: false,
     version: false,
   };
@@ -73,6 +124,41 @@ function parseArgs(raw: string[]): CliArgs {
 
     if (arg === "--staged") {
       args.staged = true;
+      continue;
+    }
+
+    if (arg === "--list-packs") {
+      args.listPacks = true;
+      continue;
+    }
+
+    if (arg === "--pack") {
+      const value = raw[i + 1];
+      if (!value) {
+        throw new Error("--pack requires a policy pack id");
+      }
+      args.pack = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--llm") {
+      const value = raw[i + 1];
+      if (value !== "off" && value !== "auto" && value !== "always") {
+        throw new Error("--llm must be one of: off, auto, always");
+      }
+      args.llmMode = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--llm-model") {
+      const value = raw[i + 1];
+      if (!value) {
+        throw new Error("--llm-model requires a model id");
+      }
+      args.llmModel = value;
+      i += 1;
       continue;
     }
 
@@ -192,19 +278,40 @@ function printHelp(): void {
   console.log(`ThreatLens ${VERSION}
 
 Usage:
-  threatlens [--staged] [--format pretty|json] [--fail-on none|low|medium|high]
-  threatlens --base <ref> [--head <ref>] [--format pretty|json] [--fail-on ...]
-  threatlens --input <path-to-diff-file> [--format pretty|json] [--fail-on ...]
+  threatlens [--staged] [--pack <pack-id>] [--llm off|auto|always] [--llm-model <id>] [--format pretty|json] [--fail-on none|low|medium|high]
+  threatlens --base <ref> [--head <ref>] [--pack <pack-id>] [--llm ...] [--format pretty|json] [--fail-on ...]
+  threatlens --input <path-to-diff-file> [--pack <pack-id>] [--llm ...] [--format pretty|json] [--fail-on ...]
+  threatlens --list-packs
 
 Options:
   --staged           Scan staged changes (git diff --cached)
   --base <ref>       Scan diff from a base ref
   --head <ref>       Optional head ref (only with --base)
   --input <file>     Scan a diff from a file
+  --pack <id>        Select policy pack (default: startup-default)
+  --list-packs       Show available policy packs
+  --llm <mode>       LLM advisory mode: off | auto | always (default: off)
+  --llm-model <id>   Optional OpenRouter model id override
   --format <mode>    Output format: pretty | json (default: pretty)
-  --fail-on <level>  Exit non-zero when findings meet level (default: medium)
+  --fail-on <level>  Override pack fail threshold
   -h, --help         Show help
   -v, --version      Show version`);
+}
+
+function dedupeFindings(findings: Finding[]): Finding[] {
+  const seen = new Set<string>();
+  const result: Finding[] = [];
+
+  for (const finding of findings) {
+    const key = `${finding.ruleId}:${finding.filePath}:${finding.line}:${finding.evidence}:${finding.source ?? "rule"}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(finding);
+  }
+
+  return result;
 }
 
 main().catch((error: unknown) => {

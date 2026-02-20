@@ -1,105 +1,157 @@
 # threatlens
 
-`threatlens` scans pull request diffs for risky security patterns before they land in `main`.
+ThreatLens is a diff-first security guardrail service for pull requests.
 
-This is a CLI built for teams that want fast signal during review, without spinning up a full SAST stack.
+It is built for teams that need practical signal fast, especially around risky business-logic regressions. It combines:
 
-## What it catches today
+- deterministic rules for reliable blocking
+- policy packs for team-specific tuning
+- optional LLM advisory analysis through OpenRouter (non-blocking by default)
 
-- auth checks that look bypassed or turned off
+## What this catches now
+
+- auth checks that look bypassed or disabled
 - hardcoded credentials/tokens
 - TLS verification disabled
-- wildcard CORS + credentials
-- open redirects from user input
+- wildcard CORS with credentials
+- open redirect patterns
 - SSRF-like outbound requests from user input
 - command execution with user input
 - JWT `alg=none`
 
-## Quick start
+## Product shape
+
+ThreatLens is not trying to replace Semgrep/CodeQL.
+
+Use it as a focused, custom guardrail layer in PR review flow, where speed and business-context rules matter.
+
+## Run locally
+
+Install:
 
 ```bash
 bun install
+```
+
+CLI:
+
+```bash
 bun run src/cli.ts --help
 ```
 
-Scan current working tree diff:
+Web app + API:
+
+```bash
+bun run dev:web
+```
+
+Open `http://localhost:3000` when `vercel dev` starts.
+
+## CLI usage
+
+Scan working tree:
 
 ```bash
 bun run src/cli.ts
 ```
 
-Scan staged changes only:
+Scan staged changes:
 
 ```bash
 bun run src/cli.ts --staged
 ```
 
-Scan against a base branch (good for CI):
+Scan against base:
 
 ```bash
 bun run src/cli.ts --base origin/main --head HEAD --format json
 ```
 
-Scan a diff file:
+List packs:
 
 ```bash
-bun run src/cli.ts --input examples/sample.diff
+bun run src/cli.ts --list-packs
 ```
 
-Fail CI on medium/high findings (default behavior):
+Use strict tenant pack:
 
 ```bash
-bun run src/cli.ts --base origin/main --head HEAD --fail-on medium
+bun run src/cli.ts --pack tenant-isolation --fail-on medium
 ```
 
-Only report, never fail:
+Enable LLM advisory (OpenRouter):
 
 ```bash
-bun run src/cli.ts --fail-on none
+OPENROUTER_API_KEY=... bun run src/cli.ts --llm auto
 ```
 
-## Output
+## API
 
-Pretty output is human readable.
+### `POST /api/scan`
 
-JSON output is stable and automation-friendly:
+Request body:
 
 ```json
 {
-  "findings": [
-    {
-      "ruleId": "hardcoded-secret",
-      "severity": "high",
-      "filePath": "api/auth.ts",
-      "line": 14,
-      "evidence": "const password = \"super-secret-password\";"
-    }
-  ],
-  "summary": {
-    "total": 1,
-    "high": 1,
-    "medium": 0,
-    "low": 0
+  "diff": "... unified diff ...",
+  "packId": "startup-default",
+  "failOn": "high",
+  "llm": {
+    "mode": "auto"
   }
 }
 ```
 
-## Philosophy
+Response includes:
 
-`threatlens` is intentionally opinionated:
+- `summary`
+- `findings`
+- `shouldBlock` (deterministic rules only)
+- `llm` metadata (`attempted`, `model`, advisory message)
 
-- optimize for catching risky diffs early
-- keep false negatives low on high-impact patterns
-- stay simple enough to run on every PR
+Notes:
 
-This is not a replacement for full static analysis. It is a practical guardrail in code review flow.
+- `overrides` are intentionally restricted to authenticated requests (`x-api-key` matching `THREATLENS_API_KEY`) to prevent bypass abuse.
 
-## Roadmap
+### `GET /api/packs`
 
-- suppressions with inline comments
-- custom rule packs
-- SARIF export
-- GitHub App mode with PR comments
+Returns available policy packs.
+
+## OpenRouter configuration
+
+Environment variables:
+
+- `OPENROUTER_API_KEY` (required for LLM mode)
+- `OPENROUTER_MODEL` (optional, default `openai/gpt-5-mini`)
+- `OPENROUTER_PROVIDER` (optional provider pin)
+- `OPENROUTER_REFERER` (optional, default `https://threatlens.local`)
+- `OPENROUTER_TITLE` (optional request title)
+- `THREATLENS_API_KEY` (optional; when set, required as `x-api-key` header for any request that enables LLM mode)
+
+LLM guidance in this project:
+
+- deterministic findings remain the only blocking signal
+- LLM output is advisory unless explicitly changed
+- if OpenRouter fails or is not configured, scan still succeeds with deterministic checks
+
+## Deploy (Vercel)
+
+```bash
+vercel
+```
+
+For production:
+
+```bash
+vercel --prod
+```
+
+## Validate
+
+```bash
+bun run typecheck
+bun test
+```
 
 ## License
 
