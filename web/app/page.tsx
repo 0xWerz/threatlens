@@ -57,10 +57,7 @@ index b11c0de..f00dbab 100644
 
 export default function Home() {
   const apiBase = useMemo(() => {
-    return (
-      process.env.NEXT_PUBLIC_THREATLENS_API_URL?.replace(/\/$/, "") ||
-      "https://threatlens.werz.xyz"
-    );
+    return process.env.NEXT_PUBLIC_THREATLENS_API_URL?.replace(/\/$/, "") || "";
   }, []);
 
   const [packs, setPacks] = useState<PolicyPack[]>([]);
