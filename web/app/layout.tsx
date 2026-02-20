@@ -1,40 +1,35 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
+import { Playfair_Display, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const displayFont = Bebas_Neue({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: "400",
-});
-
-const bodyFont = Instrument_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
+const displayFont = Playfair_Display({
+    variable: "--font-display",
+    subsets: ["latin"],
+    weight: ["400", "700", "900"],
 });
 
 const monoFont = IBM_Plex_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "600"],
+    variable: "--font-mono",
+    subsets: ["latin"],
+    weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "ThreatLens | Next Web App",
-  description:
-    "Next.js frontend for ThreatLens diff-first PR security guardrails.",
+    title: "ThreatLens — PR Security Guardrails",
+    description:
+        "Diff-first security scanning for pull requests. Catch hardcoded secrets, auth bypasses, and risky config changes before they merge.",
 };
 
 export default function RootLayout({
-  children,
+    children,
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en">
-      <body className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
-        {children}
-      </body>
-    </html>
-  );
+    return (
+        <html lang="en">
+            <body className={`${displayFont.variable} ${monoFont.variable}`}>
+                {children}
+            </body>
+        </html>
+    );
 }
